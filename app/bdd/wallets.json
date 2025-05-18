@@ -1,0 +1,18 @@
+{
+  "wallet1": {
+    "address": "rpnJpf3MGxFYy3TL7v6jhvTY4hCrwfFM5q",
+    "classicAddress": "rpnJpf3MGxFYy3TL7v6jhvTY4hCrwfFM5q",
+    "publicKey": "ED95F7B3264BFADC607C41C27CFEAA0CB3BCE4FBD1F6E64DD3CA3A6DDD5B9BC14A",
+    "privateKey": "ED0FB7FFCD20AAF6BFB21A3E0EE404E345D00A03B30A31D9F570501F6499866B26",
+    "seed": "sEdVaKKWidsQnVMV1QXERLHm4UEZrhC",
+    "balance": 100
+  },
+  "wallet2": {
+    "address": "rJ3bmrWqd31PzeGXzTZdzWB7ma1BRAqSre",
+    "classicAddress": "rJ3bmrWqd31PzeGXzTZdzWB7ma1BRAqSre",
+    "publicKey": "ED8BFB6820D5C89BE37AAC9270C13424FA02A38AF3B0D680F5E5E3FCF8B13AFE5D",
+    "privateKey": "ED4DF4B950FAC3069A1CD47C9F62EE6F757A369A829396A2B4E15A54957088C8DD",
+    "seed": "sEdTheRiMjtuuHbkS2CFstb1ULKurwd",
+    "balance": 100
+  }
+}
