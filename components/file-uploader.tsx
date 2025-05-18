@@ -48,10 +48,18 @@ export function FileUploader({ onFileSelect, acceptedFileTypes, maxSizeMB, curre
   const validateAndProcessFile = (file: File) => {
     setError(null)
 
-    // Check file type
+    // Nouvelle logique de validation du type de fichier
     const fileType = file.type
-    if (!fileType.match(acceptedFileTypes.replace("*", ""))) {
-      setError(`Invalid file type. Please upload a ${acceptedFileTypes.replace("/*", "")} file.`)
+    const acceptedTypes = acceptedFileTypes.split(',').map(t => t.trim())
+    const isAccepted = acceptedTypes.some(type => {
+      if (type.endsWith('/*')) {
+        // ex: video/*
+        return fileType.startsWith(type.replace('/*', '/')) || fileType.startsWith(type.replace('/*', ''))
+      }
+      return fileType === type
+    })
+    if (!isAccepted) {
+      setError(`Invalid file type. Supported: ${acceptedFileTypes}`)
       return
     }
 

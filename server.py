@@ -72,7 +72,7 @@ async def summarize(payload: Transcript):
 
     try:
         summary = summarize_text(payload.text)
-        return summary
+        return {"summary": summary}
     except Exception as exc:
         logging.exception("Summarization failed")
         raise HTTPException(status_code=500, detail=str(exc))
