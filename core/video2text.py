@@ -1,9 +1,11 @@
-from __future__ import annotations
+print("🧠 Running file:", __file__)
+# from __future__ import annotations
 
 import concurrent.futures as cf
 import logging
 import math
 import os
+import json
 import subprocess
 import tempfile
 from pathlib import Path
@@ -15,6 +17,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger(__name__)
 
 MAX_WORKERS = 4
@@ -119,3 +122,49 @@ def transcribe_video(path: str, chunk_sec: int = 600) -> Tuple[str, List[dict]]:
     segs = [s for _, _, ss in results for s in ss]
     segs.sort(key=lambda s: s["start"])
     return full.strip(), segs
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Transcribe a video in the 'data/' folder using Whisper API")
+    parser.add_argument("filename", type=str, help="Video filename inside the 'data/' folder (e.g., video.mp4)")
+    parser.add_argument("--chunk-sec", type=int, default=600, help="Chunk duration in seconds")
+    args = parser.parse_args()
+    print("⚙️ Args parsed:", args)
+
+    # FIXED LINE BELOW 👇
+    data_dir = Path(__file__).parent.parent / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    video_path = data_dir / args.filename
+    print(f"✅  File is: {video_path}")
+
+    if not video_path.exists():
+        print(f"❌ File not found: {video_path}")
+        return
+
+    print(f"🔑 API key loaded: {'Yes' if os.getenv('OPENAI_API_KEY') else 'No'}")
+    print(f"🔍 Transcribing {video_path} ...")
+
+    try:
+        text, segments = transcribe_video(str(video_path), chunk_sec=args.chunk_sec)
+    except Exception as e:
+        print(f"❌ Transcription failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return
+
+    print(f"Transcript length: {len(text)} chars, Segments: {len(segments)}")
+    payload = {"text": text, "segments": segments}
+
+    transcript_path = data_dir / "transcript.json"
+    print(f"📁 Writing transcript to: {transcript_path.resolve()}")
+
+    with open(transcript_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ Transcript saved to {transcript_path}")
+
+if __name__ == "__main__":
+    print("")
+    main()

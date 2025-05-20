@@ -30,3 +30,6 @@ next-env.d.ts
 
 /.venv
 
+/docs
+
+/data/video.mp4

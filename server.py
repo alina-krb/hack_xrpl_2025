@@ -1,20 +1,18 @@
-import logging
+import sys
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routes.transcribe_api import router as transcribe_router
+from routes.summarize_api import router as summarize_router
+from routes.vectorize_api import router as vectorize_router
+from routes.chat_api import router as chat_router
 
-from fastapi.responses import FileResponse, JSONResponse
-import json, tempfile
 
-from video2text import transcribe_video
+sys.path.append(str(Path(__file__).resolve().parent))
 
-from summarizer import summarize_text
-from pydantic import BaseModel
-
-logging.basicConfig(level=logging.INFO)
-app = FastAPI(title="Simple Video Transcriber")
+app = FastAPI(title="Knowledge API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,62 +21,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class Transcript(BaseModel):
-    text: str
-    segments: list[dict] | None = None
-
-@app.post("/transcribe")
-async def transcribe(
-    download: bool = False,                       # <-- NEW QS flag
-    file: UploadFile = File(...)
-):
-    suffix = Path(file.filename).suffix or ".mp4"
-    with NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(await file.read())
-        tmp_path = Path(tmp.name)
-
-    try:
-        text, segments = transcribe_video(str(tmp_path))
-        payload = {"text": text, "segments": segments}
-
-        if not download:
-            # normal JSON response (unchanged)
-            return JSONResponse(payload)
-
-        # ----- build a temp .json file and send it back -----
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, prefix="transcript_"
-        ) as jf:
-            json.dump(payload, jf, ensure_ascii=False, indent=2)
-            json_path = Path(jf.name)
-
-        return FileResponse(
-            path=json_path,
-            media_type="application/json",
-            filename="transcript.json",
-        )
-
-    except Exception as exc:
-        logging.exception("Transcription failed")
-        raise HTTPException(status_code=500, detail=str(exc))
-    finally:
-        tmp_path.unlink(missing_ok=True)
-
-@app.post("/summarize")
-async def summarize(payload: Transcript):
-    """Accept transcript JSON (same structure from /transcribe) and return a summary."""
-    if not payload.text:
-        raise HTTPException(400, "Field 'text' empty or missing")
-
-    try:
-        summary = summarize_text(payload.text)
-        return {"summary": summary}
-    except Exception as exc:
-        logging.exception("Summarization failed")
-        raise HTTPException(status_code=500, detail=str(exc))
-
+# Register routers
+app.include_router(transcribe_router, prefix="/transcribe")
+app.include_router(summarize_router, prefix="/summarize")
+app.include_router(vectorize_router, prefix="/vectorize")
+app.include_router(chat_router, prefix="/chat")
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)

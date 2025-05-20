@@ -1,0 +1,30 @@
+{
+  "text": "Wow this coffee's great. I was just thinking that Yeah, is that cinnamon it's just chicory Teal Isn't that hot? extremely",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 4.239999771118164,
+      "text": " Wow this coffee's great. I was just thinking that"
+    },
+    {
+      "start": 5.920000076293945,
+      "end": 8.640000343322754,
+      "text": " Yeah, is that cinnamon it's just chicory"
+    },
+    {
+      "start": 18.280000686645508,
+      "end": 20.280000686645508,
+      "text": " Teal"
+    },
+    {
+      "start": 25.200000762939453,
+      "end": 27.200000762939453,
+      "text": " Isn't that hot?"
+    },
+    {
+      "start": 27.239999771118164,
+      "end": 29.239999771118164,
+      "text": " extremely"
+    }
+  ]
+}

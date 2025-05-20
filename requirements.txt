@@ -1,11 +1,15 @@
-# ==== Web framework & server ====
-fastapi>=0.111
-uvicorn[standard]>=0.29      # brings in uvicorn + httpx, watchfiles, etc.
-
-# ==== OpenAI client & retry helper ====
-openai>=1.14
-backoff>=2.2                 # exponential-retry decorator used in both helpers
-
-# ==== Convenience ====
-python-dotenv>=1.0           # loads OPENAI_API_KEY from .env if present
-tqdm>=4.66                   # progress bars while chunking/transcribing
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+python-dotenv
+openai
+langchain
+langchain-openai
+langchain-community
+faiss-cpu
+tqdm
+pillow
+pytesseract
+PyMuPDF
+unstructured

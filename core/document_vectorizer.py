@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import logging
 import argparse
@@ -24,6 +25,10 @@ log = logging.getLogger()
 
 # ─── Environment Setup ──────────────────────────────────────────────
 load_dotenv()
+
+# ─── Paths ──────────────────────────────────────────────
+BASE_DIR = Path(__file__).parent.parent.resolve()
+DATA_DIR = BASE_DIR / "data"
 
 class DocumentProcessor:
     """Class for loading and processing documents of various types"""
@@ -126,35 +131,37 @@ class DocumentProcessor:
     
     def load_document(self, file_path: str, file_type: Optional[str] = None) -> Tuple[List[Any], str]:
         """
-        Load a document based on its file type
+        Load a document based on its file type or content.
         
         Args:
-            file_path: Path to the document
-            file_type: Optional override for file type detection
-            
+            file_path: Path to the document.
+            file_type: Optional override for file type detection.
+
         Returns:
-            Tuple of (list of document objects, detected file type)
+            Tuple of (list of Document objects, detected file type).
         """
+        extension = os.path.splitext(file_path)[1].lower()
+        mime_type, _ = mimetypes.guess_type(file_path)
         file_type = file_type or self.detect_file_type(file_path)
         log.info(f"Loading {file_type} document: {file_path}...")
-        
+
         documents = []
-        
+
         try:
             if file_type == 'pdf':
-                # Try PyMuPDFLoader first for standard PDFs
                 try:
                     loader = PyMuPDFLoader(file_path)
                     documents = loader.load()
-                    # If this PDF might contain images/tables, check if content is limited
                     if documents and len(''.join([doc.page_content for doc in documents])) < 100:
                         log.warning(f"Limited text content in PDF, might need OCR: {file_path}")
                 except Exception as e:
                     log.error(f"Error loading PDF with PyMuPDFLoader: {e}")
                     documents = []
+
             elif file_type == 'txt':
                 loader = TextLoader(file_path)
                 documents = loader.load()
+
             elif file_type == 'presentation':
                 try:
                     loader = UnstructuredPowerPointLoader(file_path)
@@ -162,35 +169,51 @@ class DocumentProcessor:
                 except Exception as e:
                     log.error(f"Error loading PowerPoint file: {e}")
                     documents = []
+
             elif file_type == 'image':
-                # Use our custom image loader with Tesseract
                 documents = self.load_image_with_tesseract(file_path)
+
+            elif extension == '.json' or mime_type == 'application/json':
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if "text" not in data:
+                        log.warning(f"'text' field missing in JSON: {file_path}")
+                        return [], 'json'
+                    if not data["text"].strip():
+                        log.warning(f"Transcript text is empty in {file_path}")
+                        return [], 'json'
+
+                    text = data["text"]
+                    doc = Document(
+                        page_content=text,
+                        metadata={
+                            "source": file_path,
+                            "file_type": "json",
+                            "title": os.path.basename(file_path)
+                        }
+                    )
+                    documents = [doc]
+                except Exception as e:
+                    log.error(f"Error reading transcript JSON: {e}")
+                    return [], 'json'
+
             else:
-                # For unsupported types, we'll log and skip
                 log.warning(f"Unsupported file type {file_type} for {file_path}, skipping")
                 return [], file_type
-                
+
         except Exception as e:
-            log.error(f"Error loading {file_path} as {file_type}: {e}")
+            log.error(f"Unexpected error while loading {file_path}: {e}")
             return [], file_type
-        
-        # Enhance metadata for each document
+
+        # Enhance metadata
         for doc in documents:
-            # Ensure metadata exists
             if not hasattr(doc, 'metadata'):
                 doc.metadata = {}
-                
-            # Add file path if not present
-            if 'source' not in doc.metadata:
-                doc.metadata['source'] = file_path
-                
-            # Add file type
-            doc.metadata['file_type'] = file_type
-            
-            # Extract filename as document title if not present
-            if 'title' not in doc.metadata:
-                doc.metadata['title'] = os.path.basename(file_path)
-        
+            doc.metadata.setdefault('source', file_path)
+            doc.metadata.setdefault('file_type', file_type)
+            doc.metadata.setdefault('title', os.path.basename(file_path))
+
         return documents, file_type
     
     def load_documents_from_directory(self, 
@@ -209,7 +232,7 @@ class DocumentProcessor:
             Dictionary of file_type -> list of document objects
         """
         if file_types is None:
-            file_types = ['pdf', 'txt', 'presentation', 'image', 'spreadsheet', 'document']
+            file_types = ['pdf', 'txt', 'presentation', 'image', 'spreadsheet', 'document', 'json']
             
         documents_by_type = {file_type: [] for file_type in file_types}
         
@@ -255,6 +278,7 @@ class DocumentProcessor:
             List of processed document chunks
         """
         if not documents:
+            log.warning("No chunks produced from document")
             return []
             
         # Split documents into chunks
@@ -265,7 +289,7 @@ class DocumentProcessor:
         return docs
     
     def create_vector_store(self,documents: List[Any],data_type: str, 
-                            output_dir: str = "vector_db", 
+                            output_dir: str = str(DATA_DIR / "vector_db"), 
                             batch_size: int = 16, 
                             combine_all: bool = True) -> FAISS:
         """
@@ -340,7 +364,7 @@ class DocumentVectorizer:
     
     def vectorize_by_format(self,
                           input_path: str,
-                          output_dir: str = "vector_db",
+                          output_dir: str = str(DATA_DIR / "vector_db"),
                           batch_size: int = 16,
                           chunk_size: int = 1000,
                           chunk_overlap: int = 200,
@@ -361,9 +385,8 @@ class DocumentVectorizer:
         """
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
-        
+
         vector_stores = {}
-        # For tracking all data types processed
         all_data_types = set()
         
         # Handle file or directory
@@ -418,50 +441,57 @@ class DocumentVectorizer:
         return vector_stores
 
 def main():
-    parser = argparse.ArgumentParser(description="Vectorize documents by format/data type")
-    parser.add_argument("input_path", help="Path to document file or directory")
-    parser.add_argument("--output-dir", default="vector_db", help="Directory for vector store")
-    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for embedding")
+    parser = argparse.ArgumentParser(description="Vectorize documents into FAISS vector store.")
+    parser.add_argument("--input", required=True, nargs="+",help="One or more file paths to vectorize (e.g., data/doc1.pdf data/doc2.txt)")    
+    parser.add_argument("--output", default=str(BASE_DIR / "data" / "vector_db"), help="Output folder for FAISS vector store")
     parser.add_argument("--chunk-size", type=int, default=1000, help="Size of text chunks")
     parser.add_argument("--chunk-overlap", type=int, default=200, help="Overlap between chunks")
-    parser.add_argument("--openai-api-key", help="OpenAI API key (or set OPENAI_API_KEY env var)")
-    parser.add_argument("--separate-by-type", action="store_false", dest="combine_all", 
-                      help="Separate vector stores by document type (default: combine all)")
+    parser.add_argument("--batch-size", type=int, default=16, help="Batch size for OpenAI embedding requests")
+    parser.add_argument("--openai-api-key", help="OpenAI API key (or use .env)")
+    parser.add_argument("--separate-by-type", action="store_false", dest="combine_all", help="Keep separate vector DBs by file type")
     parser.set_defaults(combine_all=True)
-    
     args = parser.parse_args()
-    
-    # Initialize vectorizer
-    vectorizer = DocumentVectorizer(args.openai_api_key)
-    
-    # Vectorize documents
-    vector_stores = vectorizer.vectorize_by_format(
-        args.input_path,
-        args.output_dir,
-        args.batch_size,
-        args.chunk_size,
-        args.chunk_overlap,
-        args.combine_all
-    )
-    
-    # Print summary
-    print("\n" + "="*50)
-    print(f"✅ Vectorization complete")
-    print(f"📂 Vector store saved to {args.output_dir}")
-    
-    if args.combine_all:
-        print(f"📊 Created combined vector store with documents of these types:")
-        # We need to inspect the metadata to find the types
-        if "combined" in vector_stores:
-            # This would require additional code to inspect the metadata
-            print("   - All document types combined in one store")
-    else:
-        print(f"📊 Created {len(vector_stores)} separate vector stores by format:")
-        for data_type in vector_stores:
-            print(f"   - {data_type}")
-    
-    print("="*50)
-    print("\nYou can now use the QA system to query across these data sources.")
+
+    input_paths = [Path(p).resolve() if Path(p).is_absolute() else (BASE_DIR / p).resolve() for p in args.input]
+    output_path = Path(args.output).resolve()
+
+    for path in input_paths:
+        if not path.exists():
+            log.error(f"❌ Input path does not exist: {path}")
+            exit(1)
+        log.info(f"📂 Input path: {path}")
+    log.info(f"💾 Output path: {output_path}")
+
+    vectorizer = DocumentVectorizer(openai_api_key=args.openai_api_key)
+
+    stores = {}
+    try:
+        for input_path in input_paths:
+            s = vectorizer.vectorize_by_format(
+                input_path=str(input_path),
+                output_dir=str(output_path),
+                batch_size=args.batch_size,
+                chunk_size=args.chunk_size,
+                chunk_overlap=args.chunk_overlap,
+                combine_all=args.combine_all,
+            )
+            stores.update(s)
+
+            print("\n" + "=" * 50)
+            print("✅ Vectorization complete")
+            print(f"📁 Saved to: {output_path}")
+            if args.combine_all:
+                print("📊 Combined FAISS index created")
+            else:
+                print("📊 Vector stores created by file type:")
+                for file_type in stores:
+                    print(f"  • {file_type}")
+            print("=" * 50)
+
+    except Exception as e:
+        log.exception("❌ Vectorization failed")
+        exit(1)
+
 
 if __name__ == "__main__":
     main()
