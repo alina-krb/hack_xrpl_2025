@@ -65,7 +65,7 @@ class QARequest(BaseModel):
 
 vectorizer = DocumentVectorizer()
 
-
+# Receive video and return transcript.json in the same folder 
 @app.post("/transcribe")
 async def transcribe(
     download: bool = False,                       # <-- NEW QS flag
@@ -104,7 +104,7 @@ async def transcribe(
         tmp_path.unlink(missing_ok=True)
 
 @app.post("/summarize")
-async def summarize(payload: Transcript):
+async def summarize_post(payload: Transcript):
     """Accept transcript JSON (same structure from /transcribe) and return a summary."""
     if not payload.text:
         raise HTTPException(400, "Field 'text' empty or missing")
@@ -116,8 +116,14 @@ async def summarize(payload: Transcript):
         logging.exception("Summarization failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
+# return the summary of the video
+@app.get("/summarize")
+async def summarize_get(payload: Transcript):
+    return
+
+# vectorize summary and other files
 @app.post("/vectorize")
-async def vectorize(files: List[UploadFile] = File(...)):
+async def vectorize_post(files: List[UploadFile] = File(...)):
     """
     Upload:
       • transcript.json      (required, contains {"text": "...", "segments":[]})
@@ -185,6 +191,10 @@ async def vectorize(files: List[UploadFile] = File(...)):
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
+# return the vectorized files database
+@app.get("/vectorize")
+async def vectorize_get(files: List[UploadFile] = File(...)):
+    return
 
 def _get_qa_chain(idx_path: str, model_name="gpt-3.5-turbo") -> RetrievalQA:
     global _qa_chain
