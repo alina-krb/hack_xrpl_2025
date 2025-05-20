@@ -3,6 +3,7 @@ from textwrap import wrap
 import backoff
 from openai import OpenAI
 from dotenv import load_dotenv
+from pathlib import Path
 
 load_dotenv()
 log = logging.getLogger(__name__)
@@ -91,3 +92,38 @@ def summarize_text(text: str) -> dict:
     chunks = _chunk_text(text)
     chunk_summaries = [_summarize_chunk(chunk, i) for i, chunk in enumerate(chunks)]
     return _consolidate(chunk_summaries)
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Summarize the transcript.json inside the 'data/' folder.")
+    parser.add_argument("--output", type=str, help="Optional path to save summary (default: data/summary.json)")
+    args = parser.parse_args()
+
+    data_dir = Path(__file__).parent.parent / "data"
+    transcript_path = data_dir / "transcript.json"
+
+    if not transcript_path.exists():
+        print(f"❌ File not found: {transcript_path}")
+        exit(1)
+
+    with open(transcript_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if "text" not in data or not data["text"].strip():
+        print("❌ 'text' field missing or empty in transcript.json")
+        exit(1)
+
+    print("🔁 Summarizing transcript...")
+    summary = summarize_text(data["text"])
+
+    output_path = Path(args.output) if args.output else data_dir / "summary.json"
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+
+    print(f"✅ Summary saved to {output_path.resolve()}")
+
+
+if __name__ == "__main__":
+    main()
