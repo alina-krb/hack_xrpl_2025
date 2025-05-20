@@ -65,9 +65,12 @@ class QARequest(BaseModel):
 
 vectorizer = DocumentVectorizer()
 
-# Receive video and return transcript.json in the same folder 
+
+# TRANSCRIBE
+# POST : Receive video and return transcript.json in the same folder 
+# GET :  Return transcript.json
 @app.post("/transcribe")
-async def transcribe(
+async def transcribe_post(
     download: bool = False,                       # <-- NEW QS flag
     file: UploadFile = File(...)
 ):
@@ -80,22 +83,10 @@ async def transcribe(
         text, segments = transcribe_video(str(tmp_path))
         payload = {"text": text, "segments": segments}
 
-        if not download:
-            # normal JSON response (unchanged)
-            return JSONResponse(payload)
-
-        # ----- build a temp .json file and send it back -----
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", delete=False, prefix="transcript_"
-        ) as jf:
-            json.dump(payload, jf, ensure_ascii=False, indent=2)
-            json_path = Path(jf.name)
-
-        return FileResponse(
-            path=json_path,
-            media_type="application/json",
-            filename="transcript.json",
-        )
+        # Save transcript to transcript.json
+        with open("transcript.json", "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return {"message": "Transcript saved to transcript.json"}
 
     except Exception as exc:
         logging.exception("Transcription failed")
@@ -103,25 +94,51 @@ async def transcribe(
     finally:
         tmp_path.unlink(missing_ok=True)
 
+@app.get("/transcribe")
+async def transcribe_get():
+    transcript_path = Path("transcript.json")
+    if not transcript_path.exists():
+        raise HTTPException(status_code=404, detail="transcript.json not found")
+    return FileResponse(
+        path=transcript_path,
+        media_type="application/json",
+        filename="transcript.json",
+    )
+
+#SUMMARIZE
+# POST : Receive transcript.json and return a summary.
+# GET : Receive name of video and return a summary.
 @app.post("/summarize")
 async def summarize_post(payload: Transcript):
-    """Accept transcript JSON (same structure from /transcribe) and return a summary."""
+    """Accept transcript JSON (same structure from /transcribe) and save a summary to summary.json."""
     if not payload.text:
         raise HTTPException(400, "Field 'text' empty or missing")
 
     try:
         summary = summarize_text(payload.text)
-        return summary
+        # Save summary to summary.json
+        with open("summary.json", "w", encoding="utf-8") as f:
+            json.dump({"summary": summary}, f, ensure_ascii=False, indent=2)
+        return {"message": "Summary saved to summary.json"}
     except Exception as exc:
         logging.exception("Summarization failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
 # return the summary of the video
 @app.get("/summarize")
-async def summarize_get(payload: Transcript):
-    return
+async def summarize_get():
+    summary_path = Path("summary.json")
+    if not summary_path.exists():
+        raise HTTPException(status_code=404, detail="summary.json not found")
+    return FileResponse(
+        path=summary_path,
+        media_type="application/json",
+        filename="summary.json",
+    )
 
-# vectorize summary and other files
+# VECTORIZE
+# POST : Receive transcript.json and other files and return a vectorized files database.
+# GET : Receive name of video and return a vectorized files database.   
 @app.post("/vectorize")
 async def vectorize_post(files: List[UploadFile] = File(...)):
     """
