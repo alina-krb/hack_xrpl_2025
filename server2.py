@@ -210,8 +210,15 @@ async def vectorize_post(files: List[UploadFile] = File(...)):
 
 # return the vectorized files database
 @app.get("/vectorize")
-async def vectorize_get(files: List[UploadFile] = File(...)):
-    return
+async def vectorize_get():
+    index_path = Path("vector_db/index.faiss")
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="index.faiss not found in vector_db")
+    return FileResponse(
+        path=index_path,
+        media_type="application/octet-stream",
+        filename="index.faiss",
+    )
 
 def _get_qa_chain(idx_path: str, model_name="gpt-3.5-turbo") -> RetrievalQA:
     global _qa_chain
